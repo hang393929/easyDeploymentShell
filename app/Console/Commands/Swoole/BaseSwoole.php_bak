@@ -1,0 +1,39 @@
+<?php
+/**
+ * swoole 基类，需安装及swoole扩展
+ */
+namespace App\Console\Commands\Swoole;
+
+use Illuminate\Console\Command as BaseCommand;
+use Symfony\Component\Console\Command\SignalableCommandInterface;
+
+class BaseSwoole extends BaseCommand implements SignalableCommandInterface
+{
+    protected $signals = [
+        SIGTERM,
+    ];
+
+    protected $running = true;
+
+    public function __construct()
+    {
+        ini_set('memory_limit', '256M');
+        ini_set('default_socket_timeout', -1);
+
+        parent::__construct();
+    }
+
+    public function getSubscribedSignals(): array
+    {
+        return $this->signals;
+    }
+
+    public function handleSignal(int $signal): void
+    {
+        switch ($signal) {
+            case SIGTERM:
+                $this->running = false;
+                break;
+        }
+    }
+}

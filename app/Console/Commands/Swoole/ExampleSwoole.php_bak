@@ -1,0 +1,78 @@
+<?php
+/**
+ * 示例：基于swoole的消费redis队列
+ */
+namespace App\Console\Commands\Swoole;
+
+use App\Constants\RedisKey;
+use App\Library\CommonHelper;
+use Illuminate\Support\Facades\Log;
+
+class ExampleSwoole extends Swoole
+{
+    public $signature = 'example:swoole';
+    protected $description = '添加视频队列任务';
+
+    private $workerNum = 1;
+
+    /**
+     * @var int redis库
+     */
+    public static $redisDb = RedisKey::REDIS_DB_ONE;
+
+
+    /**
+     * @var int 开启的携程数
+     */
+    protected $ctrip = 0;
+
+    public function __construct()
+    {
+        parent::__construct();
+
+        $this->init();
+    }
+
+    protected function init()
+    {
+        parent::init();
+        $this->setWorkerNum($this->ctrip ?: swoole_cpu_num() * 2);//swoole_cpu_num()
+    }
+
+    public function onWorkerStart($pool, $workerId)
+    {
+        parent::onWorkerStart($pool, $workerId);
+        $this->taskCallVideo($workerId);
+    }
+
+    public function taskCallVideo($workerId)
+    {
+        $redis = CommonHelper::getRedisConnection(self::$redisDb);
+        if (!$redis) {
+            return false;
+        }
+        while ($this->getWorker($workerId)['running']) {
+            $this->sigtermTickHandler();
+            $this->info('Start workId' . $workerId);
+            $this->dealRedis(RedisKey::$commandForRedis[$this->signature] ?? '', $redis);
+            $this->info('End workId==');
+        }
+    }
+
+    public function dealRedis($key, $redis)
+    {
+        $dealData = $redis->blPop($key, 10);
+        if (!$dealData) {
+            return false;
+        }
+        [$key, $val] = $dealData;
+        if (!$val) {
+            return false;
+        }
+        Log::channel('swooleLog')->info('==' . $this->signature . '== ', json_decode($val, true));
+
+        // 业务逻辑
+
+        $this->info('==' . $this->signature . '处理完成==');
+    }
+}

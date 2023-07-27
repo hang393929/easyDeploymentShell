@@ -1,0 +1,9 @@
+<?php
+namespace App\Console\Commands\Swoole;
+
+interface ProcessPool
+{
+    public function onWorkerStart($pool, $workerId);
+
+    public function onWorkerStop($pool, $workerId);
+}

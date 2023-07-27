@@ -1,0 +1,91 @@
+<?php
+/**
+ * swoole 多携程调度
+ *
+ * nohup /php执行路径/php /项目路径/artisan  执行命令(example: example:swoole) > /dev/null 2>&1 &
+ * ps -ef | wc example:swoole -l
+ * kill -TIME xxx
+ */
+namespace App\Console\Commands\Swoole;
+
+use Swoole\Process\Pool;
+use Illuminate\Support\Carbon;
+use App\Console\Commands\Swoole\ProcessPool;
+
+class Swoole extends BaseSwoole implements ProcessPool
+{
+    private $workers = [];
+
+    private $workerNum = 1;
+
+    public function __construct()
+    {
+        parent::__construct();
+
+        $this->init();
+    }
+
+    public function handle()
+    {
+        $this->start();
+    }
+
+    public function onWorkerStart($pool, $workerId)
+    {
+        $this->setWorker($workerId);
+        pcntl_signal(SIGTERM, function () use ($workerId) {
+            $this->setWorker($workerId, false);
+        });
+
+        dump(sprintf('[%s] Worker %d started', Carbon::now()->toDateTimeString(), $workerId));
+    }
+
+    public function onWorkerStop($pool, $workerId)
+    {
+        dump(sprintf('[%s] Worker %d stopped', Carbon::now()->toDateTimeString(), $workerId));
+    }
+
+    protected function init()
+    {
+        $this->setWorkerNum(swoole_cpu_num());
+    }
+
+    protected function setWorker(int $id, bool $running = true)
+    {
+        $this->workers[$id] = [
+            'id'      => $id,
+            'running' => $running,
+        ];
+    }
+
+    protected function getWorker(int $id)
+    {
+        return $this->workers[$id];
+    }
+
+    protected function setWorkerNum(int $num)
+    {
+        $this->workerNum = $num;
+    }
+
+    protected function getWorkerNum()
+    {
+        return $this->workerNum;
+    }
+
+    protected function sigtermTickHandler()
+    {
+        return pcntl_signal_dispatch();
+    }
+
+    private function start(Pool $pool)
+    {
+        $processPool = new Pool($this->workerNum);
+        $processPool->on('WorkerStart', [$this, 'onWorkerStart']);
+        $processPool->on('WorkerStop', [$this, 'onWorkerStop']);
+
+        return $processPool->start();
+    }
+
+
+}
